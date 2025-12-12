@@ -151,14 +151,14 @@ class PurchaseOrderPDF(FPDF):
         self.set_font('Arial', 'B', 9)
         self.set_fill_color(220, 220, 220)
         
-        # Headers: SKU (25), Description (50), Packing (35), Qty (15), Unit (15), Price (25), Total (25)
-        self.cell(25, 6, "SKU", 1, 0, 'C', True)
-        self.cell(50, 6, "Description", 1, 0, 'C', True)
-        self.cell(35, 6, "Packing", 1, 0, 'C', True)
-        self.cell(15, 6, "Qty", 1, 0, 'C', True)
-        self.cell(15, 6, "Unit", 1, 0, 'C', True)
-        self.cell(25, 6, "Unit Price", 1, 0, 'C', True)
-        self.cell(25, 6, "Total", 1, 1, 'C', True)
+        # Headers: SKU (20), Description (72), Packing (32), Qty (12), Unit (12), Price (21), Total (21)
+        self.cell(20, 6, "SKU", 1, 0, 'C', True)
+        self.cell(72, 6, "Description", 1, 0, 'C', True)
+        self.cell(32, 6, "Packing", 1, 0, 'C', True)
+        self.cell(12, 6, "Qty", 1, 0, 'C', True)
+        self.cell(12, 6, "Unit", 1, 0, 'C', True)
+        self.cell(21, 6, "Unit Price", 1, 0, 'C', True)
+        self.cell(21, 6, "Total", 1, 1, 'C', True)
         
         self.set_font('Arial', '', 9)
         subtotal = 0.0
@@ -170,13 +170,13 @@ class PurchaseOrderPDF(FPDF):
             # Description Priority: Product.description > Line.description > Product.name
             desc_text = line.product.description or line.description or line.product.name or ""
             
-            self.cell(25, 6, str(line.product.sku), 1)
-            self.cell(50, 6, str(desc_text)[:30], 1) # Truncate for simple table
-            self.cell(35, 6, str(line.packing_structure or "")[:20], 1)
-            self.cell(15, 6, str(line.qty), 1, 0, 'C')
-            self.cell(15, 6, str(line.unit or ""), 1, 0, 'C')
-            self.cell(25, 6, f"{po.currency} {line.cost:.2f}", 1, 0, 'R')
-            self.cell(25, 6, f"{line_total:.2f}", 1, 1, 'R')
+            self.cell(20, 6, str(line.product.sku), 1)
+            self.cell(72, 6, str(desc_text)[:50], 1) # Increased truncate limit
+            self.cell(32, 6, str(line.packing_structure or "")[:20], 1)
+            self.cell(12, 6, str(line.qty), 1, 0, 'C')
+            self.cell(12, 6, str(line.unit or ""), 1, 0, 'C')
+            self.cell(21, 6, f"{po.currency} {line.cost:.2f}", 1, 0, 'R')
+            self.cell(21, 6, f"{line_total:.2f}", 1, 1, 'R')
             
         self.ln(5)
 
