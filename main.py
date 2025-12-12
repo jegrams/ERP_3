@@ -624,6 +624,7 @@ def view_order_details(session: Session):
     print(f"Date:       {po.date}")
     print(f"Status:     {po.status}")
     print(f"Terms:      {po.payment_terms}")
+    print(f"Ship Via:   {po.shipping_method}")
     print(f"Incoterm:   {po.incoterm}")
     print(f"Port:       {po.port_of_destination}")
     print(f"Consignee:  {po.consignee}")
@@ -656,13 +657,63 @@ def view_order_details(session: Session):
     print(f"TOTAL:      ${grand_total:.2f}")
     
     print("\n")
-    action = safe_input("Press [Enter] to go back, or 'p' to generate PDF: ")
+    action = safe_input("Press [Enter] to go back, 'p' for PDF, 'e' to Edit: ")
     if action.lower() == 'p':
         # Need company info
         our_company = session.query(OurCompany).first()
         filepath = generate_po_pdf(po, our_company)
         print(f"PDF Generated: {filepath}")
         safe_input("Press Enter to continue...")
+    elif action.lower() == 'e':
+        edit_purchase_order(session, po)
+
+def edit_purchase_order(session: Session, po: PurchaseOrder):
+    print(f"\n--- Edit PO {po.po_number} ---")
+    print("Press [Enter] to keep current value.")
+    
+    # 1. Status
+    print(f"Current Status: {po.status}")
+    new_status = safe_input("New Status (Draft/Sent/Accepted/Received/Cancelled/Closed): ")
+    if new_status and new_status in ['Draft', 'Sent', 'Accepted', 'Received', 'Cancelled', 'Closed']:
+        po.status = new_status
+        
+    # 2. Date
+    d_str = safe_input(f"Date [{po.date.strftime('%Y-%m-%d')}]: ")
+    if d_str:
+        try:
+             po.date = datetime.strptime(d_str, "%Y-%m-%d")
+        except ValueError: print("Invalid date, keeping original.")
+        
+    # 3. Logistics
+    po.payment_terms = safe_input(f"Terms [{po.payment_terms}]: ") or po.payment_terms
+    po.shipping_method = safe_input(f"Ship Via [{po.shipping_method}]: ") or po.shipping_method
+    po.ship_to_address = safe_input(f"Ship To [{po.ship_to_address}]: ") or po.ship_to_address
+    po.incoterm = safe_input(f"Incoterm [{po.incoterm}]: ") or po.incoterm
+    po.port_of_destination = safe_input(f"Port [{po.port_of_destination}]: ") or po.port_of_destination
+    
+    # 4. Parties
+    po.consignee = safe_input(f"Consignee [{po.consignee}]: ") or po.consignee
+    po.notify_party = safe_input(f"Notify [{po.notify_party}]: ") or po.notify_party
+    po.tc_party = safe_input(f"TC Party [{po.tc_party}]: ") or po.tc_party
+    
+    # 5. Financials
+    s_cost = safe_input(f"Shipping Cost [{po.shipping_cost}]: ")
+    if s_cost: po.shipping_cost = float(s_cost)
+    
+    disc = safe_input(f"Discount [{po.discount_amount}]: ")
+    if disc: po.discount_amount = float(disc)
+    
+    tax = safe_input(f"Tax [{po.tax_amount}]: ")
+    if tax: po.tax_amount = float(tax)
+    
+    po.notes = safe_input(f"Notes [{po.notes}]: ") or po.notes
+    
+    try:
+        session.commit()
+        print("PO Updated Successfully.")
+    except Exception as e:
+        session.rollback()
+        print(f"Error updating PO: {e}")
 
 def create_customer_order(session: Session):
      # Placeholder to match existing menu call not to break it? 
