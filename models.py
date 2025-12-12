@@ -126,13 +126,35 @@ class PurchaseOrder(Base):
     date = Column(DateTime, default=datetime.utcnow)
     
     # New Fields
+    display_status = Column(String(50), default='Draft') # For UI display if needed, or use Enum
     status = Column(Enum('Draft', 'Sent', 'Accepted', 'Received', 'Cancelled', 'Closed', name='po_status'), default='Draft')
+    
+    # Standard Fields
+    po_number = Column(String(50), unique=True, nullable=True) # e.g. PO-2025-001
+    created_by = Column(String(100), nullable=True)
+    approved_by = Column(String(100), nullable=True)
+    vendor_reference = Column(String(100), nullable=True) # Vendor Quote/Invoice #
+    
+    # Dates
     expected_date = Column(DateTime, nullable=True)
+    
+    # Financials
+    currency = Column(String(10), default='USD')
     payment_terms = Column(String(100), nullable=True) # e.g. "Net 30"
-    shipping_method = Column(String(100), nullable=True)
+    discount_amount = Column(Float, default=0.0)
     shipping_cost = Column(Float, default=0.0)
     tax_amount = Column(Float, default=0.0)
-    notes = Column(String(500), nullable=True)
+    
+    # Shipping & Logistics
+    ship_to_address = Column(Text, nullable=True) # Full address override
+    shipping_method = Column(String(100), nullable=True) # e.g. DHL, FedEx
+    incoterm = Column(String(50), nullable=True) # e.g. CIF, FOB
+    port_of_destination = Column(String(100), nullable=True)
+    # packing_structure moved to Line Item
+    consignee = Column(Text, nullable=True) # For Bill of Lading
+    notify_party = Column(Text, nullable=True) # For Bill of Lading
+    
+    notes = Column(Text, nullable=True)
 
     supplier = relationship("Supplier")
     lines = relationship("PurchaseOrderLine", back_populates="order", cascade="all, delete-orphan")
@@ -142,8 +164,17 @@ class PurchaseOrderLine(Base):
     id = Column(Integer, primary_key=True)
     po_id = Column(Integer, ForeignKey('purchase_orders.id'), nullable=False)
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    
+    # Line Details
+    description = Column(String(255), nullable=True) # Override product name
     qty = Column(Integer, nullable=False)
+    unit = Column(String(50), nullable=True) # e.g. kg, lb, ea
     cost = Column(Float, nullable=False)
+    packing_structure = Column(String(255), nullable=True) # e.g. "20kg Paper Sacks"
+    
+    # Reception Tracking
+    quantity_received = Column(Integer, default=0)
+    received_date = Column(DateTime, nullable=True)
     
     order = relationship("PurchaseOrder", back_populates="lines")
     product = relationship("Product")

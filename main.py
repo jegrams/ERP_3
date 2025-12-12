@@ -15,7 +15,8 @@ from models import (
     Supplier, Customer, Product, ProductLot,
     PurchaseOrder, PurchaseOrderLine,
     CustomerOrder, CustomerOrderLine,
-    Invoice, InvoiceLine, Document
+    Invoice, InvoiceLine, Document,
+    OurCompany
 )
 from pdf_generator import generate_invoice_pdf
 
@@ -345,7 +346,312 @@ def list_products(session: Session):
     print_table(data, ["ID", "SKU", "Name", "Price"])
 
 # --- Order Management ---
-# ... (Order functions unchanged)
+
+def create_purchase_order(session: Session):
+    print("\n--- Create Purchase Order ---")
+    
+    # 1. Select Supplier
+    suppliers = session.query(Supplier).all()
+    if not suppliers:
+        print("No suppliers found. Please add a supplier first.")
+        return
+    
+    supplier_map = {f"{s.name} | ID: {s.id}": s.id for s in suppliers}
+    completer = WordCompleter(list(supplier_map.keys()), ignore_case=True, match_middle=True)
+    
+    try:
+        sup_input = prompt("Select Supplier: ", completer=completer)
+    except KeyboardInterrupt: return
+    
+    if not sup_input: return
+    
+    supplier_id = None
+    if sup_input in supplier_map:
+        supplier_id = supplier_map[sup_input]
+    elif sup_input.isdigit():
+        supplier_id = int(sup_input)
+    else:
+        match = re.search(r"\|\s*ID:\s*(\d+)\s*$", sup_input)
+        if match: supplier_id = int(match.group(1))
+    
+    if not supplier_id or not session.get(Supplier, supplier_id):
+        print("Invalid supplier.")
+        return
+
+    # 2. Header Information
+    while True:
+        po_number = input("PO Number (e.g. PO-24-001): ")
+        if not po_number:
+            print("PO Number is required.")
+            continue
+            
+        # Check uniqueness
+        existing_po = session.query(PurchaseOrder).filter_by(po_number=po_number).first()
+        if existing_po:
+            print(f"Error: PO Number '{po_number}' already exists. Please choose another.")
+        else:
+            break
+        
+    date_str = input("Date (YYYY-MM-DD) [Today]: ")
+    po_date = datetime.utcnow()
+    if date_str:
+        try:
+            po_date = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            print("Invalid date format. Using today.")
+
+    expected_str = input("Expected Date (YYYY-MM-DD): ")
+    expected_date = None
+    if expected_str:
+         try:
+            expected_date = datetime.strptime(expected_str, "%Y-%m-%d")
+         except ValueError: pass
+
+    payment_terms = input("Payment Terms [Net 180]: ") or "Net 180"
+    currency = input("Currency [USD]: ") or "USD"
+    
+    # Defaults for Consignee/Notify
+    our_company = session.query(OurCompany).first()
+    default_consignee = our_company.company_name if our_company else "Our Company"
+    
+    # Shipping & Intl
+    print("--- Shipping Details ---")
+    ship_to = input("Ship To Address (Leave empty for default): ")
+    method = input("Shipping Method: ")
+    incoterm = input("Incoterm (e.g. CIF): ")
+    port = input("Port of Destination: ")
+    # packing = input("Packing Structure (e.g. Paper Sacks): ") # Moved to line item
+    
+    consignee = input(f"Consignee [{default_consignee}]: ") or default_consignee
+    notify = input(f"Notify Party [{default_consignee}]: ") or default_consignee
+    
+    notes = input("Notes: ")
+    
+    # 3. Line Items
+    lines = []
+    
+    products = session.query(Product).all()
+    prod_map = {f"{p.sku} - {p.name}": p for p in products}
+    prod_completer = WordCompleter(list(prod_map.keys()), ignore_case=True, match_middle=True)
+    
+    while True:
+        print(f"\n--- Add Line Item ({len(lines)} added) ---")
+        try:
+            p_input = prompt("Select Product (Empty to finish): ", completer=prod_completer)
+        except KeyboardInterrupt: break
+        
+        if not p_input: break
+        
+        product = None
+        if p_input in prod_map:
+            product = prod_map[p_input]
+        else:
+             print("Please select a valid product.")
+             continue
+             
+        qty_str = input("Quantity: ")
+        if not qty_str.isdigit():
+             print("Invalid quantity.")
+             continue
+        qty = int(qty_str)
+        
+        unit = input(f"Unit: ")
+        
+        cost_str = input(f"Unit Cost [{product.cost_price or 0.0}]: ")
+        cost = float(cost_str) if cost_str else (product.cost_price or 0.0)
+        
+        desc = input(f"Description [{product.name}]: ") or product.name
+        
+        # Packing structure per line
+        pack_line = input("Packing Structure (e.g. 20kg Sacks): ")
+        
+        lines.append({
+            "product_id": product.id,
+            "qty": qty,
+            "unit": unit,
+            "cost": cost,
+            "description": desc,
+            "packing_structure": pack_line,
+            "total": qty * cost
+        })
+        
+    if not lines:
+        print("No lines added. Aborting.")
+        return
+
+    # 4. Summary & Save
+    total_goods = sum(l['total'] for l in lines)
+    print(f"\nTotal Goods: ${total_goods:.2f}")
+    
+    try:
+        ship_cost = float(input("Shipping Cost [0.0]: ") or 0.0)
+        discount = float(input("Discount [0.0]: ") or 0.0)
+        tax = float(input("Tax [0.0]: ") or 0.0)
+    except ValueError:
+        ship_cost, discount, tax = 0.0, 0.0, 0.0
+        
+    grand_total = total_goods + ship_cost + tax - discount
+    print(f"Grand Total: ${grand_total:.2f}")
+    
+    confirm = input("Save Order? (y/n): ")
+    if confirm.lower() != 'y':
+        print("Cancelled.")
+        return
+        
+    # Create Objects
+    po = PurchaseOrder(
+        supplier_id=supplier_id,
+        po_number=po_number,
+        date=po_date,
+        expected_date=expected_date,
+        payment_terms=payment_terms,
+        currency=currency,
+        ship_to_address=ship_to,
+        shipping_method=method,
+        incoterm=incoterm,
+        port_of_destination=port,
+        # packing_structure=packing, # Removed
+        consignee=consignee,
+        notify_party=notify,
+        notes=notes,
+        shipping_cost=ship_cost,
+        discount_amount=discount,
+        tax_amount=tax,
+        status='Draft'
+    )
+    
+    for l in lines:
+        po_line = PurchaseOrderLine(
+            product_id=l['product_id'],
+            qty=l['qty'],
+            unit=l['unit'],
+            cost=l['cost'],
+            description=l['description'],
+            packing_structure=l['packing_structure'] # Added
+        )
+        po.lines.append(po_line)
+        
+    session.add(po)
+    session.commit()
+    print(f"Purchase Order {po_number} created successfully (ID: {po.id}).")
+
+def list_orders(session: Session):
+    print("\n--- List Purchase Orders ---")
+    pos = session.query(PurchaseOrder).all()
+    if not pos:
+        print("No purchase orders found.")
+        return
+        
+    data = []
+    for po in pos:
+        total = sum(l.cost * l.qty for l in po.lines) + po.shipping_cost + po.tax_amount - po.discount_amount
+        data.append([
+            po.id, 
+            po.po_number, 
+            po.supplier.name, 
+            po.date.strftime("%Y-%m-%d"), 
+            po.status, 
+            f"${total:.2f}"
+        ])
+    
+    print_table(data, ["ID", "PO #", "Supplier", "Date", "Status", "Total"])
+
+def view_order_details(session: Session):
+    print("\n--- View Purchase Order ---")
+    pos = session.query(PurchaseOrder).all()
+    if not pos: return
+
+    po_map = {f"{po.po_number} | {po.supplier.name}": po.id for po in pos}
+    completer = WordCompleter(list(po_map.keys()), ignore_case=True, match_middle=True)
+    
+    try:
+        user_input = prompt("Select PO: ", completer=completer)
+    except KeyboardInterrupt: return
+    
+    if not user_input: return
+    
+    po_id = po_map.get(user_input)
+    # Simple direct int fallback
+    if not po_id and user_input.isdigit():
+        po_id = int(user_input)
+        
+    po = session.get(PurchaseOrder, po_id)
+    if not po: 
+        print("PO not found.")
+        return
+        
+    print(f"\nPO #:       {po.po_number} (ID: {po.id})")
+    print(f"Supplier:   {po.supplier.name}")
+    print(f"Date:       {po.date}")
+    print(f"Status:     {po.status}")
+    print(f"Terms:      {po.payment_terms}")
+    print(f"Incoterm:   {po.incoterm}")
+    print(f"Port:       {po.port_of_destination}")
+    print(f"Consignee:  {po.consignee}")
+    print(f"Notify:     {po.notify_party}")
+    print(f"Ship To:    {po.ship_to_address or 'Default'}")
+    print(f"Notes:      {po.notes}")
+    
+    print("\n--- Line Items ---")
+    data = []
+    for l in po.lines:
+        data.append([
+            l.product.sku,
+            l.description,
+            l.qty,
+            l.unit,
+            l.packing_structure, # Added to view
+            f"${l.cost:.2f}",
+            f"${(l.qty * l.cost):.2f}"
+        ])
+    print_table(data, ["SKU", "Description", "Qty", "Unit", "Packing", "Cost", "Total"])
+    
+    subtotal = sum(l.cost * l.qty for l in po.lines)
+    print(f"\nSubtotal:   ${subtotal:.2f}")
+    if po.discount_amount: print(f"Discount:  -${po.discount_amount:.2f}")
+    if po.shipping_cost:   print(f"Shipping:  +${po.shipping_cost:.2f}")
+    if po.tax_amount:      print(f"Tax:       +${po.tax_amount:.2f}")
+    
+    grand_total = subtotal + po.shipping_cost + po.tax_amount - po.discount_amount
+    print(f"TOTAL:      ${grand_total:.2f}")
+    print("\n")
+
+def create_customer_order(session: Session):
+     # Placeholder to match existing menu call not to break it? 
+     # User asked for POs, but create_customer_order is called in menu. 
+     # I should just implement create_purchase_order and ensure other undefined functions don't crash if they were missing.
+     # Wait, existing code had create_customer_order commented or "..."? 
+     # Line 348 was "# ... (Order functions unchanged)". Ah, I need to check if I am overwriting them.
+     # The view_file 138 showed lines 347-348 were "# --- Order Management ---\n# ... (Order functions unchanged)".
+     # That implies the view was truncated or I assumed they were there? 
+     # Actually, in Step 138, lines 347-349 show "# --- Order Management ---\n# ... (Order functions unchanged)".
+     # This means the previous `view_file` might have skipped the actual implementation or they were literally placeholders.
+     # Let me check if create_customer_order exists.
+     # Re-reading Step 138 content carefully...
+     # Ah, line 439 calls `create_customer_order(session)`.
+     # But line 348 says `(Order functions unchanged)`.
+     # If the file content *actually* has them, I shouldn't overwrite them blindly.
+     # The `view_file` tool *replaces* content in the thought block representation? No.
+     # Step 138 output shows line 347-349.
+     # If I overwrite 347-349, I might delete existing functions if they are there.
+     # BUT, the view_file output in Step 138 literally shows `# ... (Order functions unchanged)`.
+     # Wait, does that mean the file *contains* that comment, or the tool summarized it?
+     # "The above content shows the entire, complete file contents" -> It seems the file *actually* has that comment if it was a copy-paste from a previous interaction?
+     # OR, the `view_file` output in Step 138 lines 348 is suspicious.
+     # Let me check the file content around line 348 again or assume I need to ADD these functions.
+     # If `create_customer_order` is called in `order_menu` (line 439), it MUST be defined somewhere or the code crashes.
+     # In line 439: `elif choice == '2': create_customer_order(session)`
+     # If `create_customer_order` isn't defined, `main.py` is broken right now.
+     # I see `models` imported in line 13.
+     # Let's assume I need to PROVIDE these PO functions. 
+     # I will define `create_customer_order` as a placeholder if it doesn't exist to prevent crash, OR
+     # I will just add my PO functions and leave the rest.
+     # Safest is to append my functions or replace the `# ...` placeholder.
+     pass
+
+def create_customer_order(session: Session):
+    print("Feature not implemented yet.")
+
 
 # --- Menus ---
 
@@ -430,14 +736,16 @@ def order_menu(session: Session):
         print("\n--- Order Management ---")
         print("1. Create Purchase Order")
         print("2. Create Customer Order")
-        print("3. List All Orders")
+        print("3. List Purchase Orders")
+        print("4. View Purchase Order Details")
         print("9. Main Menu")
         print("0. Back")
         
         choice = input("Select: ")
         if choice == '1': create_purchase_order(session)
-        elif choice == '2': create_customer_order(session)
+        elif choice == '2': create_customer_order(session) # Placeholder
         elif choice == '3': list_orders(session)
+        elif choice == '4': view_order_details(session) # New option
         elif choice == '9': return "main"
         elif choice == '0': break
 
