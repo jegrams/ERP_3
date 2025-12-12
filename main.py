@@ -213,6 +213,15 @@ def view_customer_details(session: Session):
     print(f"{c.ship_to_city}, {c.ship_to_state} {c.ship_to_zip}")
     print(f"{c.ship_to_country}")
     
+    print(f"{c.ship_to_country}")
+    
+    print("--- Billing Address ---")
+    print(f"{c.bill_to_addr1}")
+    if c.bill_to_addr2: print(f"{c.bill_to_addr2}")
+    print(f"{c.bill_to_city}, {c.bill_to_state} {c.bill_to_zip}")
+    print(f"{c.bill_to_country}")
+    print(f"Billing Email: {c.billing_email}")
+    
     print("\n")
     action = safe_input("Press [Enter] to go back, or 'e' to Edit: ")
     if action.lower() == 'e':
@@ -233,7 +242,17 @@ def edit_customer(session: Session, c: Customer):
     c.ship_to_city = safe_input(f"City [{c.ship_to_city}]: ") or c.ship_to_city
     c.ship_to_state = safe_input(f"State [{c.ship_to_state}]: ") or c.ship_to_state
     c.ship_to_zip = safe_input(f"Zip [{c.ship_to_zip}]: ") or c.ship_to_zip
+    c.ship_to_zip = safe_input(f"Zip [{c.ship_to_zip}]: ") or c.ship_to_zip
     c.ship_to_country = safe_input(f"Country [{c.ship_to_country}]: ") or c.ship_to_country
+    
+    print("--- Billing Address ---")
+    c.bill_to_addr1 = safe_input(f"Bill Addr 1 [{c.bill_to_addr1}]: ") or c.bill_to_addr1
+    c.bill_to_addr2 = safe_input(f"Bill Addr 2 [{c.bill_to_addr2}]: ") or c.bill_to_addr2
+    c.bill_to_city = safe_input(f"Bill City [{c.bill_to_city}]: ") or c.bill_to_city
+    c.bill_to_state = safe_input(f"Bill State [{c.bill_to_state}]: ") or c.bill_to_state
+    c.bill_to_zip = safe_input(f"Bill Zip [{c.bill_to_zip}]: ") or c.bill_to_zip
+    c.bill_to_country = safe_input(f"Bill Country [{c.bill_to_country}]: ") or c.bill_to_country
+    c.billing_email = safe_input(f"Billing Email [{c.billing_email}]: ") or c.billing_email
     
     try:
         session.commit()

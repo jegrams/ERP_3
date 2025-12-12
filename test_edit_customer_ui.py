@@ -28,14 +28,17 @@ def test_edit_customer_ui():
     print(f"Testing Edit on Customer ID: {c_id}")
 
     # 2. Mock Inputs
-    # Order: Name, Contact, Email, Phone, Addr1, Addr2, City, State, Zip, Country
-    # Action: Change Contact, Keep Email, Change Phone, Keep Addr
+    # Order: Name, Contact, Email, Phone, Addr1, Addr2, City, State, Zip, Country,
+    #        BillAddr1, BillAddr2, BillCity, BillState, BillZip, BillCountry, BillEmail
+    # Action: Change Contact, Keep Email, Change Phone, Keep Addr, Set BillAddr1
     inputs = [
         "",                 # Name (Keep)
         "New Contact",      # Contact (Change)
         "",                 # Email (Keep)
         "555-9999",         # Phone (Change)
-        "", "", "", "", "", "" # Address (Keep all)
+        "", "", "", "", "", "", # Address (Keep all)
+        "999 Bill St",      # Bill Addr 1 (Change)
+        "", "New York", "NY", "10001", "USA", "billing@test.com" # Billing Info
     ]
     
     input_gen = (i for i in inputs)
