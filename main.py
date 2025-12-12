@@ -147,59 +147,169 @@ def list_customers(session: Session):
     data = [[c.id, c.customer_name] for c in customers]
     print_table(data, ["ID", "Customer Name"])
 
-def view_customer_details(session: Session):
-    print("\n--- View Customer Details (Active Search) ---")
-    
-    # 1. Load all customers for the completer
+def pick_customer(session: Session):
+    """Helper to interactively select a customer and return the object."""
     customers = session.query(Customer).all()
     if not customers:
-        print("No customers found in database.")
-        return
-
-    # 2. Prepare the list of choices: "Name | ID: <id>"
-    #    We use a format easy to parse back.
-    #    Using a dictionary map might be safer effectively, but completer needs strings.
+        print("No customers found.")
+        return None
+        
     customer_map = {f"{c.customer_name} | ID: {c.id}": c.id for c in customers}
     choices = list(customer_map.keys())
-
     completer = WordCompleter(choices, ignore_case=True, match_middle=True)
-
-    print("Start typing to search... (Press Tab/Arrows to select, Enter to confirm)")
-    try:
-        user_input = prompt("Customer: ", completer=completer)
-    except KeyboardInterrupt:
-        print("Cancelled.")
-        return
-
-    if not user_input:
-        return
-
-    # 3. Resolve the selection
-    cust_id = None
     
-    # Case A: User selected a valid option from the list (exact match)
+    try:
+        user_input = prompt("Select Customer: ", completer=completer)
+    except KeyboardInterrupt:
+        return None
+        
+    if not user_input: return None
+    
+    cust_id = None
     if user_input in customer_map:
         cust_id = customer_map[user_input]
-    
-    # Case B: User typed an ID directly (fallback)
     elif user_input.isdigit():
         cust_id = int(user_input)
-    
-    # Case C: User typed something else. We try to extract ID from string if format matches key 
-    #         "Name | ID: 123" -> regex
     else:
-        # Try to parse " | ID: 123" at end
         match = re.search(r"\|\s*ID:\s*(\d+)\s*$", user_input)
         if match:
             cust_id = int(match.group(1))
-        else:
-            print("Invalid selection. Please select a customer from the list.")
-            return
+            
+    if cust_id:
+        return session.get(Customer, cust_id)
+    return None
 
-    # 4. Fetch and Display
-    c = session.get(Customer, cust_id)
+def get_formatted_address(source_obj):
+    """Formats address from OurCompany or Customer object."""
+    if isinstance(source_obj, OurCompany):
+        lines = [source_obj.company_name, source_obj.address1, source_obj.address2, 
+                 f"{source_obj.city or ''} {source_obj.state or ''} {source_obj.zip_code or ''}",
+                 source_obj.country]
+        return "\n".join(filter(None, lines))
+    elif isinstance(source_obj, Customer):
+        lines = [source_obj.customer_name, source_obj.ship_to_addr1, source_obj.ship_to_addr2,
+                 f"{source_obj.ship_to_city or ''} {source_obj.ship_to_state or ''} {source_obj.ship_to_zip or ''}",
+                 source_obj.ship_to_country]
+        return "\n".join(filter(None, lines))
+    return ""
+
+def select_address_source(session: Session, field_name="Address"):
+    """
+    Prompts user to select address source.
+    Returns: (is_manual_override, value_string)
+    If manual, returns (True, None) -> Let caller prompt for text.
+    If selection made, returns (False, formatted_address_string).
+    """
+    print(f"Select source for {field_name}:")
+    print(" [M]anual Entry (Type it yourself)")
+    print(" [O]ur Company Details")
+    print(" [C]ustomer Details")
+    print(" [S]kip / Keep Current")
+    
+    choice = safe_input("Choice [M]: ").strip().upper()
+    
+    if choice == 'O':
+        comp = session.query(OurCompany).first()
+        if comp:
+            return False, get_formatted_address(comp)
+        else:
+            print("Our Company details not found.")
+            return True, None
+    elif choice == 'C':
+        cust = pick_customer(session)
+        if cust:
+            return False, get_formatted_address(cust)
+        else:
+            return True, None
+    elif choice == 'S':
+        return False, None # Signal to keep/skip
+    else:
+        return True, None # Manual
+
+def pick_customer(session: Session):
+    """Helper to interactively select a customer and return the object."""
+    customers = session.query(Customer).all()
+    if not customers:
+        print("No customers found.")
+        return None
+        
+    customer_map = {f"{c.customer_name} | ID: {c.id}": c.id for c in customers}
+    choices = list(customer_map.keys())
+    completer = WordCompleter(choices, ignore_case=True, match_middle=True)
+    
+    try:
+        user_input = prompt("Select Customer: ", completer=completer)
+    except KeyboardInterrupt:
+        return None
+        
+    if not user_input: return None
+    
+    cust_id = None
+    if user_input in customer_map:
+        cust_id = customer_map[user_input]
+    elif user_input.isdigit():
+        cust_id = int(user_input)
+    else:
+        match = re.search(r"\|\s*ID:\s*(\d+)\s*$", user_input)
+        if match:
+            cust_id = int(match.group(1))
+            
+    if cust_id:
+        return session.get(Customer, cust_id)
+    return None
+
+def get_formatted_address(source_obj):
+    """Formats address from OurCompany or Customer object."""
+    if isinstance(source_obj, OurCompany):
+        lines = [source_obj.company_name, source_obj.address1, source_obj.address2, 
+                 f"{source_obj.city or ''} {source_obj.state or ''} {source_obj.zip_code or ''}",
+                 source_obj.country]
+        return "\n".join(filter(None, lines))
+    elif isinstance(source_obj, Customer):
+        lines = [source_obj.customer_name, source_obj.ship_to_addr1, source_obj.ship_to_addr2,
+                 f"{source_obj.ship_to_city or ''} {source_obj.ship_to_state or ''} {source_obj.ship_to_zip or ''}",
+                 source_obj.ship_to_country]
+        return "\n".join(filter(None, lines))
+    return ""
+
+def select_address_source(session: Session, field_name="Address"):
+    """
+    Prompts user to select address source.
+    Returns: (is_manual_override, value_string)
+    If manual, returns (True, None) -> Let caller prompt for text.
+    If selection made, returns (False, formatted_address_string).
+    """
+    print(f"Select source for {field_name}:")
+    print(" [M]anual Entry (Type it yourself)")
+    print(" [O]ur Company Details")
+    print(" [C]ustomer Details")
+    print(" [S]kip / Keep Current")
+    
+    choice = safe_input("Choice [M]: ").strip().upper()
+    
+    if choice == 'O':
+        comp = session.query(OurCompany).first()
+        if comp:
+            return False, get_formatted_address(comp)
+        else:
+            print("Our Company details not found.")
+            return True, None
+    elif choice == 'C':
+        cust = pick_customer(session)
+        if cust:
+            return False, get_formatted_address(cust)
+        else:
+            return True, None
+    elif choice == 'S':
+        return False, None # Signal to keep/skip
+    else:
+        return True, None # Manual
+
+def view_customer_details(session: Session):
+    print("\n--- View Customer Details (Active Search) ---")
+    
+    c = pick_customer(session)
     if not c:
-        print(f"Customer with ID {cust_id} not found.")
         return
 
     print(f"\nID: {c.id}")
@@ -490,14 +600,38 @@ def create_purchase_order(session: Session):
     
     # Shipping & Intl
     print("--- Shipping Details ---")
-    ship_to = safe_input("Ship To Address (Leave empty for default): ")
+    
+    # Ship To
+    is_manual, val = select_address_source(session, "Ship To Address")
+    if not is_manual and val is not None:
+        ship_to = val
+        print(f"Selected Ship To:\n{ship_to}")
+    elif not is_manual and val is None:
+         # User chose skip (which acts like empty/default here since it's new PO)
+        ship_to = ""
+    else:
+        ship_to = safe_input("Ship To Address (Leave empty for default): ")
+
     method = safe_input("Shipping Method: ")
     incoterm = safe_input("Incoterm (e.g. CIF): ")
     port = safe_input("Port of Destination: ")
-    # packing = safe_input("Packing Structure (e.g. Paper Sacks): ") # Moved to line item
     
-    consignee = safe_input(f"Consignee [{default_consignee}]: ") or default_consignee
-    notify = safe_input(f"Notify Party [{default_consignee}]: ") or default_consignee
+    # Consignee
+    is_manual, val = select_address_source(session, "Consignee")
+    if not is_manual and val is not None:
+        consignee = val
+        print(f"Selected Consignee:\n{consignee}")
+    else:
+        consignee = safe_input(f"Consignee [{default_consignee}]: ") or default_consignee
+
+    # Notify
+    is_manual, val = select_address_source(session, "Notify Party")
+    if not is_manual and val is not None:
+        notify = val
+        print(f"Selected Notify Party:\n{notify}")
+    else:
+        notify = safe_input(f"Notify Party [{default_consignee}]: ") or default_consignee
+        
     tc_party = safe_input("TC Party [Same as Consignee]: ") # Default to None/Blank implies logic elsewhere or explicit string
     if not tc_party: tc_party = "Same as Consignee"
     
@@ -735,13 +869,38 @@ def edit_purchase_order(session: Session, po: PurchaseOrder):
     # 3. Logistics
     po.payment_terms = safe_input(f"Terms [{po.payment_terms}]: ") or po.payment_terms
     po.shipping_method = safe_input(f"Ship Via [{po.shipping_method}]: ") or po.shipping_method
-    po.ship_to_address = safe_input(f"Ship To [{po.ship_to_address}]: ") or po.ship_to_address
+    
+    # Ship To Edit
+    print(f"Current Ship To: {po.ship_to_address or 'Default'}")
+    is_manual, val = select_address_source(session, "Ship To")
+    if not is_manual and val is not None:
+        po.ship_to_address = val
+    elif is_manual:
+        new_val = safe_input("New Ship To (Enter to keep): ")
+        if new_val: po.ship_to_address = new_val
+
     po.incoterm = safe_input(f"Incoterm [{po.incoterm}]: ") or po.incoterm
     po.port_of_destination = safe_input(f"Port [{po.port_of_destination}]: ") or po.port_of_destination
     
     # 4. Parties
-    po.consignee = safe_input(f"Consignee [{po.consignee}]: ") or po.consignee
-    po.notify_party = safe_input(f"Notify [{po.notify_party}]: ") or po.notify_party
+    # Consignee
+    print(f"Current Consignee: {po.consignee}")
+    is_manual, val = select_address_source(session, "Consignee")
+    if not is_manual and val is not None:
+        po.consignee = val
+    elif is_manual:
+        new_val = safe_input("New Consignee (Enter to keep): ")
+        if new_val: po.consignee = new_val
+
+    # Notify
+    print(f"Current Notify: {po.notify_party}")
+    is_manual, val = select_address_source(session, "Notify Party")
+    if not is_manual and val is not None:
+        po.notify_party = val
+    elif is_manual:
+        new_val = safe_input("New Notify (Enter to keep): ")
+        if new_val: po.notify_party = new_val
+        
     po.tc_party = safe_input(f"TC Party [{po.tc_party}]: ") or po.tc_party
     
     # 5. Financials
