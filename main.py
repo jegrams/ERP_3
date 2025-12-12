@@ -19,6 +19,7 @@ from models import (
     OurCompany
 )
 from pdf_generator import generate_invoice_pdf
+from po_pdf_generator import generate_po_pdf
 
 # --- Setup & Helpers ---
 
@@ -614,7 +615,15 @@ def view_order_details(session: Session):
     
     grand_total = subtotal + po.shipping_cost + po.tax_amount - po.discount_amount
     print(f"TOTAL:      ${grand_total:.2f}")
+    
     print("\n")
+    action = input("Press [Enter] to go back, or 'p' to generate PDF: ")
+    if action.lower() == 'p':
+        # Need company info
+        our_company = session.query(OurCompany).first()
+        filepath = generate_po_pdf(po, our_company)
+        print(f"PDF Generated: {filepath}")
+        input("Press Enter to continue...")
 
 def create_customer_order(session: Session):
      # Placeholder to match existing menu call not to break it? 
