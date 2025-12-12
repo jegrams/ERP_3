@@ -425,6 +425,8 @@ def create_purchase_order(session: Session):
     
     consignee = input(f"Consignee [{default_consignee}]: ") or default_consignee
     notify = input(f"Notify Party [{default_consignee}]: ") or default_consignee
+    tc_party = input("TC Party [Same as Consignee]: ") # Default to None/Blank implies logic elsewhere or explicit string
+    if not tc_party: tc_party = "Same as Consignee"
     
     notes = input("Notes: ")
     
@@ -514,6 +516,7 @@ def create_purchase_order(session: Session):
         # packing_structure=packing, # Removed
         consignee=consignee,
         notify_party=notify,
+        tc_party=tc_party,
         notes=notes,
         shipping_cost=ship_cost,
         discount_amount=discount,
@@ -590,6 +593,7 @@ def view_order_details(session: Session):
     print(f"Port:       {po.port_of_destination}")
     print(f"Consignee:  {po.consignee}")
     print(f"Notify:     {po.notify_party}")
+    print(f"TC Party:   {po.tc_party}")
     print(f"Ship To:    {po.ship_to_address or 'Default'}")
     print(f"Notes:      {po.notes}")
     

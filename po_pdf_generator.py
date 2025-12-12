@@ -10,15 +10,17 @@ class PurchaseOrderPDF(FPDF):
         self.logo_path = os.path.join("assets", "media", "mana-organics-IVTF Ver 3.png")
 
     def header(self):
-        # Logo (Top Right)
+        # Logo (Top Left)
         if os.path.exists(self.logo_path):
-            # x=140 (approx 210-60-10 margin), y=8, w=60
-            self.image(self.logo_path, 140, 8, 50)
+            self.image(self.logo_path, 10, 8, 40) # Smaller, Left
         
-        # Company Info (Top Left)
-        self.set_font('Arial', 'B', 14)
+        # Company Info (Below Logo)
+        # Assuming logo height ~15-20, start info at y=30
+        self.set_xy(10, 30)
+        
+        self.set_font('Arial', 'B', 12)
         company_name = self.our_company.company_name if self.our_company else "My Company"
-        self.cell(100, 6, company_name, ln=True)
+        self.cell(100, 5, company_name, ln=True)
         
         self.set_font('Arial', '', 9)
         if self.our_company:
@@ -36,12 +38,13 @@ class PurchaseOrderPDF(FPDF):
         else:
             self.cell(100, 4, "Address Line 1", ln=True)
         
-        # Title
-        self.ln(10)
-        self.set_font('Arial', 'B', 18)
-        self.cell(0, 10, 'PURCHASE ORDER', align='L', ln=True)
-        self.line(10, self.get_y(), 200, self.get_y())
-        self.ln(5)
+        # Title (Top Right)
+        self.set_xy(120, 10)
+        self.set_font('Arial', 'B', 24)
+        self.cell(80, 10, 'PURCHASE ORDER', align='R', ln=True)
+        
+        self.line(10, 60, 200, 60) # Divider line lower down
+        self.set_y(65)
 
     def footer(self):
         self.set_y(-15)
@@ -123,8 +126,15 @@ class PurchaseOrderPDF(FPDF):
         self.set_font('Arial', '', 9)
         self.multi_cell(65, 4, str(po.notify_party or ""))
         
+        # Extra Row for TC Party
+        tc_y = l_y + 15
+        print_field("TC Party:", "", 10, tc_y)
+        self.set_xy(35, tc_y)
+        self.set_font('Arial', '', 9)
+        self.multi_cell(65, 4, str(po.tc_party or ""))
+        
         new_y = self.get_y()
-        self.set_y(new_y if new_y > l_y + 15 else l_y + 15)
+        self.set_y(new_y if new_y > tc_y + 15 else tc_y + 15)
         self.ln(5)
 
         # --- 4. Line Items Table ---
@@ -220,7 +230,9 @@ def generate_po_pdf(po, our_company, output_folder='./erp_pdfs/'):
     pdf.add_page()
     pdf.chapter_body()
     
-    filename = f"PO_{po.po_number}_{po.supplier.name.replace(' ', '_')}.pdf"
+    import time
+    timestamp = int(time.time())
+    filename = f"PO_{po.po_number}_{po.supplier.name.replace(' ', '_')}_{timestamp}.pdf"
     # cleanup filename
     filename = "".join([c for c in filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_')]).strip()
     filepath = os.path.join(output_folder, filename)

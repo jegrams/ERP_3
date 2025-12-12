@@ -153,6 +153,7 @@ class PurchaseOrder(Base):
     # packing_structure moved to Line Item
     consignee = Column(Text, nullable=True) # For Bill of Lading
     notify_party = Column(Text, nullable=True) # For Bill of Lading
+    tc_party = Column(Text, nullable=True) # Transaction/Transfer Party?
     
     notes = Column(Text, nullable=True)
 
