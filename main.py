@@ -212,6 +212,35 @@ def view_customer_details(session: Session):
     if c.ship_to_addr2: print(f"{c.ship_to_addr2}")
     print(f"{c.ship_to_city}, {c.ship_to_state} {c.ship_to_zip}")
     print(f"{c.ship_to_country}")
+    
+    print("\n")
+    action = safe_input("Press [Enter] to go back, or 'e' to Edit: ")
+    if action.lower() == 'e':
+        edit_customer(session, c)
+
+def edit_customer(session: Session, c: Customer):
+    print(f"\n--- Edit Customer {c.customer_name} ---")
+    print("Press [Enter] to keep current value.")
+    
+    c.customer_name = safe_input(f"Customer Name [{c.customer_name}]: ") or c.customer_name
+    c.contact_name = safe_input(f"Contact Name [{c.contact_name}]: ") or c.contact_name
+    c.email_address = safe_input(f"Email [{c.email_address}]: ") or c.email_address
+    c.ship_to_phone = safe_input(f"Phone [{c.ship_to_phone}]: ") or c.ship_to_phone
+    
+    print("--- Shipping Address ---")
+    c.ship_to_addr1 = safe_input(f"Addr 1 [{c.ship_to_addr1}]: ") or c.ship_to_addr1
+    c.ship_to_addr2 = safe_input(f"Addr 2 [{c.ship_to_addr2}]: ") or c.ship_to_addr2
+    c.ship_to_city = safe_input(f"City [{c.ship_to_city}]: ") or c.ship_to_city
+    c.ship_to_state = safe_input(f"State [{c.ship_to_state}]: ") or c.ship_to_state
+    c.ship_to_zip = safe_input(f"Zip [{c.ship_to_zip}]: ") or c.ship_to_zip
+    c.ship_to_country = safe_input(f"Country [{c.ship_to_country}]: ") or c.ship_to_country
+    
+    try:
+        session.commit()
+        print("Customer Updated Successfully.")
+    except Exception as e:
+        session.rollback()
+        print(f"Error updating customer: {e}")
 
 def view_product_details(session: Session):
     print("\n--- View Product Details (Active Search) ---")
