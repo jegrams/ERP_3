@@ -1,0 +1,8 @@
+sqlalchemy
+pymysql
+tabulate
+fpdf2
+pandas
+openpyxl
+
+prompt_toolkit
