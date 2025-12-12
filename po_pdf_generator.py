@@ -75,10 +75,10 @@ class PurchaseOrderPDF(FPDF):
         print_field("Terms:", po.payment_terms, 110, start_y + 6)
         
         # Row 3
-        print_field("Shipping:", po.shipping_method, 10, start_y + 12)
+        print_field("Shipping Method:", po.shipping_method, 10, start_y + 12)
         print_field("Exp. Date:", po.expected_date.strftime('%Y-%m-%d') if po.expected_date else "", 110, start_y + 12)
 
-        self.ln(20)
+        self.ln(10) # Reduced from 20 to 10
 
         # --- 2. Addresses ---
         y_addr = self.get_y()
@@ -92,6 +92,7 @@ class PurchaseOrderPDF(FPDF):
         self.set_xy(10, v_y)
         supplier = po.supplier
         self.multi_cell(90, 5, f"{supplier.name}\n{supplier.contact_name or ''}\n{supplier.address1 or ''}\n{supplier.city or ''} {supplier.state or ''}\n{supplier.country or ''}\n{supplier.phone or ''}")
+        v_end_y = self.get_y()
         
         # Ship To Block
         self.set_xy(105, v_y)
@@ -103,8 +104,9 @@ class PurchaseOrderPDF(FPDF):
                  self.multi_cell(90, 5, f"{self.our_company.company_name}\n{self.our_company.address1 or ''}\n{self.our_company.city or ''} {self.our_company.state or ''}\n{self.our_company.country or ''}")
              else:
                  self.multi_cell(90, 5, "Same as User Company")
+        s_end_y = self.get_y()
 
-        self.set_y(ma(self.get_y(), v_y + 35)) # Ensure enough space
+        self.set_y(ma(v_end_y, s_end_y) + 5) # Ensure enough space
         self.ln(5)
 
         # --- 3. Logistics & Intl ---
@@ -116,26 +118,34 @@ class PurchaseOrderPDF(FPDF):
         print_field("Incoterm:", po.incoterm, 10, l_y)
         print_field("Port of Dest:", po.port_of_destination, 110, l_y)
         
-        print_field("Consignee:", "", 10, l_y + 6)
-        self.set_xy(35, l_y + 6) # Multi-cell for potentially long text
+        # Dynamic Spacing for Consignee / Notify
+        c_n_y = l_y + 8 # Start slightly lower
+        
+        # Consignee
+        print_field("Consignee:", "", 10, c_n_y)
+        self.set_xy(35, c_n_y)
         self.set_font('Arial', '', 9)
         self.multi_cell(65, 4, str(po.consignee or ""))
+        c_end = self.get_y()
         
-        print_field("Notify Party:", "", 110, l_y + 6)
-        self.set_xy(135, l_y + 6)
+        # Notify
+        print_field("Notify Party:", "", 110, c_n_y)
+        self.set_xy(135, c_n_y)
         self.set_font('Arial', '', 9)
         self.multi_cell(65, 4, str(po.notify_party or ""))
+        n_end = self.get_y()
         
-        # Extra Row for TC Party
-        tc_y = l_y + 15
-        print_field("TC Party:", "", 10, tc_y)
-        self.set_xy(35, tc_y)
+        # TC Party starts after the tallest of the previous blocks
+        tc_start_y = ma(c_end, n_end) + 6
+        
+        print_field("TC Party:", "", 10, tc_start_y)
+        self.set_xy(35, tc_start_y)
         self.set_font('Arial', '', 9)
         self.multi_cell(65, 4, str(po.tc_party or ""))
+        tc_end = self.get_y()
         
-        new_y = self.get_y()
-        self.set_y(new_y if new_y > tc_y + 15 else tc_y + 15)
-        self.ln(5)
+        self.set_y(tc_end + 8)
+
 
         # --- 4. Line Items Table ---
         self.set_font('Arial', 'B', 9)
