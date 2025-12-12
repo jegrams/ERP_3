@@ -33,37 +33,49 @@ def ensure_directories():
 def print_table(data, headers):
     print(tabulate(data, headers=headers, tablefmt="grid"))
 
+def safe_input(prompt_text):
+    """Universal input wrapper that checks for exit codes."""
+    try:
+        val = input(prompt_text)
+    except EOFError:
+        return ""
+        
+    if val.strip().lower() in ('exit', 'quit', 'q'):
+        print("Exiting program...")
+        sys.exit(0)
+    return val
+
 # --- Core CRUD ---
 
 def add_supplier(session: Session):
     print("\n--- Add Supplier ---")
-    name = input("Name: ")
-    contact_name = input("Contact Name: ")
-    email = input("Email: ")
-    phone = input("Phone: ")
-    tax_id = input("Tax ID: ")
+    name = safe_input("Name: ")
+    contact_name = safe_input("Contact Name: ")
+    email = safe_input("Email: ")
+    phone = safe_input("Phone: ")
+    tax_id = safe_input("Tax ID: ")
     
     print("--- Shipping/Physical Address ---")
-    address1 = input("Address Line 1: ")
-    address2 = input("Address Line 2: ")
-    city = input("City: ")
-    state = input("State: ")
-    zip_code = input("Zip: ")
-    country = input("Country: ")
+    address1 = safe_input("Address Line 1: ")
+    address2 = safe_input("Address Line 2: ")
+    city = safe_input("City: ")
+    state = safe_input("State: ")
+    zip_code = safe_input("Zip: ")
+    country = safe_input("Country: ")
     
     print("--- Billing Address ---")
-    bill_to_addr1 = input("Address Line 1: ")
-    bill_to_addr2 = input("Address Line 2: ")
-    bill_to_city = input("City: ")
-    bill_to_state = input("State: ")
-    bill_to_zip = input("Zip: ")
-    bill_to_country = input("Country: ")
+    bill_to_addr1 = safe_input("Address Line 1: ")
+    bill_to_addr2 = safe_input("Address Line 2: ")
+    bill_to_city = safe_input("City: ")
+    bill_to_state = safe_input("State: ")
+    bill_to_zip = safe_input("Zip: ")
+    bill_to_country = safe_input("Country: ")
     
     print("--- Notes ---")
     print("Enter notes (press Enter twice to finish):")
     lines = []
     while True:
-        line = input()
+        line = safe_input()
         if not line: break
         lines.append(line)
     notes = "\n".join(lines)
@@ -100,18 +112,18 @@ def list_suppliers(session: Session):
 
 def add_customer(session: Session):
     print("\n--- Add Customer ---")
-    customer_name = input("Customer Name: ")
-    contact_name = input("Contact Name: ")
-    email_address = input("Email Address: ")
-    ship_to_phone = input("Ship To Phone: ")
+    customer_name = safe_input("Customer Name: ")
+    contact_name = safe_input("Contact Name: ")
+    email_address = safe_input("Email Address: ")
+    ship_to_phone = safe_input("Ship To Phone: ")
     
     print("--- Shipping Address ---")
-    ship_to_addr1 = input("Address Line 1: ")
-    ship_to_addr2 = input("Address Line 2: ")
-    ship_to_city = input("City: ")
-    ship_to_state = input("State: ")
-    ship_to_zip = input("Zip: ")
-    ship_to_country = input("Country: ")
+    ship_to_addr1 = safe_input("Address Line 1: ")
+    ship_to_addr2 = safe_input("Address Line 2: ")
+    ship_to_city = safe_input("City: ")
+    ship_to_state = safe_input("State: ")
+    ship_to_zip = safe_input("Zip: ")
+    ship_to_country = safe_input("Country: ")
     
     customer = Customer(
         customer_name=customer_name,
@@ -323,14 +335,27 @@ def view_supplier_details(session: Session):
 
 def add_product(session: Session):
     print("\n--- Add Product ---")
-    sku = input("SKU: ")
-    name = input("Name: ")
-    desc = input("Description: ")
-    try:
-        price = float(input("Unit Price: "))
-    except ValueError:
-        print("Invalid price.")
-        return
+    sku = safe_input("SKU: ")
+    name = safe_input("Name: ")
+    desc = safe_input("Description: ")
+    
+    price = "0.0"
+    while True:
+        p_in = safe_input("Unit Price [0.0] (or TBD): ")
+        if not p_in:
+            break # Use default 0.0
+        
+        # Check if valid float or "TBD"
+        try:
+            float(p_in)
+            price = p_in
+            break
+        except ValueError:
+            if p_in.strip().upper() == "TBD":
+                price = "TBD"
+                break
+            print("Invalid price. Please enter a number or 'TBD'.")
+            # Loop continues
     
     product = Product(sku=sku, name=name, description=desc, unit_price=price)
     session.add(product)
@@ -381,7 +406,7 @@ def create_purchase_order(session: Session):
 
     # 2. Header Information
     while True:
-        po_number = input("PO Number (e.g. PO-24-001): ")
+        po_number = safe_input("PO Number (e.g. PO-24-001): ")
         if not po_number:
             print("PO Number is required.")
             continue
@@ -393,7 +418,7 @@ def create_purchase_order(session: Session):
         else:
             break
         
-    date_str = input("Date (YYYY-MM-DD) [Today]: ")
+    date_str = safe_input("Date (YYYY-MM-DD) [Today]: ")
     po_date = datetime.utcnow()
     if date_str:
         try:
@@ -401,15 +426,15 @@ def create_purchase_order(session: Session):
         except ValueError:
             print("Invalid date format. Using today.")
 
-    expected_str = input("Expected Date (YYYY-MM-DD): ")
+    expected_str = safe_input("Expected Date (YYYY-MM-DD): ")
     expected_date = None
     if expected_str:
          try:
             expected_date = datetime.strptime(expected_str, "%Y-%m-%d")
          except ValueError: pass
 
-    payment_terms = input("Payment Terms [Net 180]: ") or "Net 180"
-    currency = input("Currency [USD]: ") or "USD"
+    payment_terms = safe_input("Payment Terms [Net 180]: ") or "Net 180"
+    currency = safe_input("Currency [USD]: ") or "USD"
     
     # Defaults for Consignee/Notify
     our_company = session.query(OurCompany).first()
@@ -417,18 +442,18 @@ def create_purchase_order(session: Session):
     
     # Shipping & Intl
     print("--- Shipping Details ---")
-    ship_to = input("Ship To Address (Leave empty for default): ")
-    method = input("Shipping Method: ")
-    incoterm = input("Incoterm (e.g. CIF): ")
-    port = input("Port of Destination: ")
-    # packing = input("Packing Structure (e.g. Paper Sacks): ") # Moved to line item
+    ship_to = safe_input("Ship To Address (Leave empty for default): ")
+    method = safe_input("Shipping Method: ")
+    incoterm = safe_input("Incoterm (e.g. CIF): ")
+    port = safe_input("Port of Destination: ")
+    # packing = safe_input("Packing Structure (e.g. Paper Sacks): ") # Moved to line item
     
-    consignee = input(f"Consignee [{default_consignee}]: ") or default_consignee
-    notify = input(f"Notify Party [{default_consignee}]: ") or default_consignee
-    tc_party = input("TC Party [Same as Consignee]: ") # Default to None/Blank implies logic elsewhere or explicit string
+    consignee = safe_input(f"Consignee [{default_consignee}]: ") or default_consignee
+    notify = safe_input(f"Notify Party [{default_consignee}]: ") or default_consignee
+    tc_party = safe_input("TC Party [Same as Consignee]: ") # Default to None/Blank implies logic elsewhere or explicit string
     if not tc_party: tc_party = "Same as Consignee"
     
-    notes = input("Notes: ")
+    notes = safe_input("Notes: ")
     
     # 3. Line Items
     lines = []
@@ -452,21 +477,31 @@ def create_purchase_order(session: Session):
              print("Please select a valid product.")
              continue
              
-        qty_str = input("Quantity: ")
+        qty_str = safe_input("Quantity: ")
         if not qty_str.isdigit():
              print("Invalid quantity.")
              continue
         qty = int(qty_str)
         
-        unit = input(f"Unit: ")
+        unit = safe_input(f"Unit: ")
         
-        cost_str = input(f"Unit Cost [{product.cost_price or 0.0}]: ")
-        cost = float(cost_str) if cost_str else (product.cost_price or 0.0)
+        default_cost = 0.0
+        try:
+             default_cost = float(product.cost_price)
+        except (ValueError, TypeError):
+             pass # Treat TBD as 0.0 for PO creation math
         
-        desc = input(f"Description [{product.name}]: ") or product.name
+        cost_str = safe_input(f"Unit Cost [{default_cost}]: ")
+        try:
+            cost = float(cost_str) if cost_str else default_cost
+        except ValueError:
+            print("Invalid cost, defaulting to 0.0")
+            cost = 0.0
+        
+        desc = safe_input(f"Description [{product.name}]: ") or product.name
         
         # Packing structure per line
-        pack_line = input("Packing Structure (e.g. 20kg Sacks): ")
+        pack_line = safe_input("Packing Structure (e.g. 20kg Sacks): ")
         
         lines.append({
             "product_id": product.id,
@@ -487,16 +522,16 @@ def create_purchase_order(session: Session):
     print(f"\nTotal Goods: ${total_goods:.2f}")
     
     try:
-        ship_cost = float(input("Shipping Cost [0.0]: ") or 0.0)
-        discount = float(input("Discount [0.0]: ") or 0.0)
-        tax = float(input("Tax [0.0]: ") or 0.0)
+        ship_cost = float(safe_input("Shipping Cost [0.0]: ") or 0.0)
+        discount = float(safe_input("Discount [0.0]: ") or 0.0)
+        tax = float(safe_input("Tax [0.0]: ") or 0.0)
     except ValueError:
         ship_cost, discount, tax = 0.0, 0.0, 0.0
         
     grand_total = total_goods + ship_cost + tax - discount
     print(f"Grand Total: ${grand_total:.2f}")
     
-    confirm = input("Save Order? (y/n): ")
+    confirm = safe_input("Save Order? (y/n): ")
     if confirm.lower() != 'y':
         print("Cancelled.")
         return
@@ -621,13 +656,13 @@ def view_order_details(session: Session):
     print(f"TOTAL:      ${grand_total:.2f}")
     
     print("\n")
-    action = input("Press [Enter] to go back, or 'p' to generate PDF: ")
+    action = safe_input("Press [Enter] to go back, or 'p' to generate PDF: ")
     if action.lower() == 'p':
         # Need company info
         our_company = session.query(OurCompany).first()
         filepath = generate_po_pdf(po, our_company)
         print(f"PDF Generated: {filepath}")
-        input("Press Enter to continue...")
+        safe_input("Press Enter to continue...")
 
 def create_customer_order(session: Session):
      # Placeholder to match existing menu call not to break it? 
@@ -675,7 +710,7 @@ def main_menu():
     print("3. Invoicing (Convert, Print PDF)")
     print("4. Documents (Upload)")
     print("5. Exit")
-    return input("Select Option: ")
+    return safe_input("Select Option: ")
 
 def data_menu(session: Session):
     while True:
@@ -686,7 +721,7 @@ def data_menu(session: Session):
         print("9. Main Menu")
         print("0. Back")
         
-        choice = input("Select: ")
+        choice = safe_input("Select: ")
         if choice == '1':
             if product_menu(session) == "main": return "main"
         elif choice == '2':
@@ -705,7 +740,7 @@ def product_menu(session: Session):
         print("9. Main Menu")
         print("0. Back")
         
-        choice = input("Select: ")
+        choice = safe_input("Select: ")
         if choice == '1': add_product(session)
         elif choice == '2': list_products(session)
         elif choice == '3': view_product_details(session)
@@ -721,7 +756,7 @@ def customer_menu(session: Session):
         print("9. Main Menu")
         print("0. Back")
         
-        choice = input("Select: ")
+        choice = safe_input("Select: ")
         if choice == '1': add_customer(session)
         elif choice == '2': list_customers(session)
         elif choice == '3': view_customer_details(session)
@@ -737,7 +772,7 @@ def supplier_menu(session: Session):
         print("9. Main Menu")
         print("0. Back")
         
-        choice = input("Select: ")
+        choice = safe_input("Select: ")
         if choice == '1': add_supplier(session)
         elif choice == '2': list_suppliers(session)
         elif choice == '3': view_supplier_details(session)
@@ -754,7 +789,7 @@ def order_menu(session: Session):
         print("9. Main Menu")
         print("0. Back")
         
-        choice = input("Select: ")
+        choice = safe_input("Select: ")
         if choice == '1': create_purchase_order(session)
         elif choice == '2': create_customer_order(session) # Placeholder
         elif choice == '3': list_orders(session)
@@ -770,7 +805,7 @@ def invoice_menu(session: Session):
         print("9. Main Menu")
         print("0. Back")
         
-        choice = input("Select: ")
+        choice = safe_input("Select: ")
         if choice == '1': convert_co_to_invoice(session)
         elif choice == '2': generate_pdf_wrapper(session)
         elif choice == '9': return "main"

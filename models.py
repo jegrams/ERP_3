@@ -89,8 +89,8 @@ class Product(Base):
     name = Column(String(255), nullable=True) # Short display name
     description = Column(String(255))
     category = Column(String(100), nullable=True)
-    unit_price = Column(Float, default=0.0)
-    cost_price = Column(Float, default=0.0) # Standard cost
+    unit_price = Column(String(50), default="0.0") # Changed to String for TBD support
+    cost_price = Column(String(50), default="0.0") # Changed to String for TBD support
     reorder_level = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=True)
