@@ -167,9 +167,11 @@ class PurchaseOrderPDF(FPDF):
             line_total = line.cost * line.qty
             subtotal += line_total
             
-            # Simple handling for description wrap
+            # Description Priority: Product.description > Line.description > Product.name
+            desc_text = line.product.description or line.description or line.product.name or ""
+            
             self.cell(25, 6, str(line.product.sku), 1)
-            self.cell(50, 6, str(line.description)[:30], 1) # Truncate for simple table, or use MultiCell logic ideally
+            self.cell(50, 6, str(desc_text)[:30], 1) # Truncate for simple table
             self.cell(35, 6, str(line.packing_structure or "")[:20], 1)
             self.cell(15, 6, str(line.qty), 1, 0, 'C')
             self.cell(15, 6, str(line.unit or ""), 1, 0, 'C')
