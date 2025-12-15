@@ -1303,9 +1303,14 @@ def view_customer_order(session: Session):
     print(f"Balance Due: ${(total - co.amount_paid):.2f}")
     
     print("\n")
-    action = safe_input("Press [Enter] to go back, 'e' to Edit: ")
+    action = safe_input("Press [Enter] to go back, 'e' to Edit, 'i' to Generate Invoice: ")
     if action.lower() == 'e':
         edit_customer_order(session, co)
+    elif action.lower() == 'i':
+        # Lazy import to avoid circular dependency issues if any
+        from excel_invoice_generator import generate_invoice
+        generate_invoice(session, co.id)
+        safe_input("Press Enter to continue...")
 
 def edit_customer_order(session: Session, co: CustomerOrder):
     print(f"\n--- Edit Customer Order {co.id} ---")
