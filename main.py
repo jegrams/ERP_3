@@ -75,7 +75,7 @@ def add_supplier(session: Session):
     print("Enter notes (press Enter twice to finish):")
     lines = []
     while True:
-        line = safe_input()
+        line = safe_input("")
         if not line: break
         lines.append(line)
     notes = "\n".join(lines)
@@ -490,6 +490,91 @@ def view_supplier_details(session: Session):
     
     print("--- Notes ---")
     print(s.notes)
+    
+    print("\n")
+    while True:
+        action = safe_input("Press [Enter] to go back, 'e' to Edit, 'd' to Delete: ").strip().lower()
+        if action == 'e':
+            edit_supplier(session, s)
+            # Re-display details is a bit complex in this simple CLI structure without clearing screen
+            # But we can just loop back to view or return. 
+            # Let's just return to allow user to re-select or we could recursively call view_supplier... 
+            # actually better to just break and let them re-select if they want, 
+            # OR simple re-print current obj status.
+            print("\n(Updated Details)")
+            print(f"Name: {s.name}")
+            print(f"Contact: {s.contact_name}")
+            # ... simple cheat: just return to menu
+            return 
+        elif action == 'd':
+            if delete_supplier(session, s):
+                return # Successfully deleted
+            # If not deleted, loop continues
+        else:
+            return
+
+def edit_supplier(session: Session, s: Supplier):
+    print(f"\n--- Edit Supplier {s.name} ---")
+    print("Press [Enter] to keep current value.")
+    
+    s.name = safe_input(f"Name [{s.name}]: ") or s.name
+    s.contact_name = safe_input(f"Contact Name [{s.contact_name}]: ") or s.contact_name
+    s.email = safe_input(f"Email [{s.email}]: ") or s.email
+    s.phone = safe_input(f"Phone [{s.phone}]: ") or s.phone
+    s.tax_id = safe_input(f"Tax ID [{s.tax_id}]: ") or s.tax_id
+    
+    print("--- Shipping/Physical Address ---")
+    s.address1 = safe_input(f"Address 1 [{s.address1}]: ") or s.address1
+    s.address2 = safe_input(f"Address 2 [{s.address2}]: ") or s.address2
+    s.city = safe_input(f"City [{s.city}]: ") or s.city
+    s.state = safe_input(f"State [{s.state}]: ") or s.state
+    s.zip_code = safe_input(f"Zip [{s.zip_code}]: ") or s.zip_code
+    s.country = safe_input(f"Country [{s.country}]: ") or s.country
+    
+    print("--- Billing Address ---")
+    s.bill_to_addr1 = safe_input(f"Bill Addr 1 [{s.bill_to_addr1}]: ") or s.bill_to_addr1
+    s.bill_to_addr2 = safe_input(f"Bill Addr 2 [{s.bill_to_addr2}]: ") or s.bill_to_addr2
+    s.bill_to_city = safe_input(f"Bill City [{s.bill_to_city}]: ") or s.bill_to_city
+    s.bill_to_state = safe_input(f"Bill State [{s.bill_to_state}]: ") or s.bill_to_state
+    s.bill_to_zip = safe_input(f"Bill Zip [{s.bill_to_zip}]: ") or s.bill_to_zip
+    s.bill_to_country = safe_input(f"Bill Country [{s.bill_to_country}]: ") or s.bill_to_country
+
+    print("--- Notes ---")
+    # For notes, it's multiline, simpler to just replace or append? 
+    # Let's just ask if they want to overwrite notes
+    print(f"Current Notes: {s.notes}")
+    change_notes = safe_input("Edit Notes? (y/n) [n]: ").lower()
+    if change_notes == 'y':
+        print("Enter new notes (press Enter twice to finish):")
+        lines = []
+        while True:
+            line = safe_input("")
+            if not line: break
+            lines.append(line)
+        s.notes = "\n".join(lines)
+    
+    try:
+        session.commit()
+        print("Supplier Updated Successfully.")
+    except Exception as e:
+        session.rollback()
+        print(f"Error updating supplier: {e}")
+
+def delete_supplier(session: Session, s: Supplier) -> bool:
+    print(f"\n!!! WARNING: Deleting Supplier {s.name} !!!")
+    confirm = safe_input("Are you sure? This cannot be undone. (y/n): ")
+    if confirm.lower() == 'y':
+        try:
+            session.delete(s)
+            session.commit()
+            print(f"Supplier {s.name} deleted.")
+            return True
+        except Exception as e:
+            session.rollback()
+            print(f"Error deleting supplier (likely used in POs or Products): {e}")
+            return False
+    print("Deletion cancelled.")
+    return False
 
 def add_product(session: Session):
     print("\n--- Add Product ---")
@@ -956,7 +1041,334 @@ def create_customer_order(session: Session):
      pass
 
 def create_customer_order(session: Session):
-    print("Feature not implemented yet.")
+    print("\n--- Create Customer Order ---")
+    
+    # 1. Select Customer
+    customer = pick_customer(session)
+    if not customer: return
+
+    # 2. Header Information
+    print(f"Customer: {customer.customer_name}")
+    
+    while True:
+        inv_num = safe_input("Invoice Number (Optional, Unique): ")
+        if inv_num:
+            # Check uniqueness
+            exists = session.query(CustomerOrder).filter_by(invoice_number=inv_num).first()
+            if exists:
+                print(f"Error: Invoice Number '{inv_num}' already exists.")
+                continue
+        break
+        
+    po_num = safe_input("PO Number (Customer's PO): ")
+    
+    date_str = safe_input("Date (YYYY-MM-DD) [Today]: ")
+    co_date = datetime.utcnow()
+    if date_str:
+        try:
+            co_date = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            print("Invalid date format. Using today.")
+
+    tracking = safe_input("Tracking/Terms: ")
+    notes = safe_input("Notes: ")
+    
+    # Addresses - Default to Customer's, allow override
+    cust_bill = f"{customer.bill_to_addr1}\n{customer.bill_to_addr2 or ''}\n{customer.bill_to_city}, {customer.bill_to_state} {customer.bill_to_zip}\n{customer.bill_to_country}"
+    cust_ship = f"{customer.ship_to_addr1}\n{customer.ship_to_addr2 or ''}\n{customer.ship_to_city}, {customer.ship_to_state} {customer.ship_to_zip}\n{customer.ship_to_country}"
+    
+    print("\n--- Bill To Address ---")
+    print(f"Customer Default:\n{cust_bill}")
+    use_def = safe_input("Use Default? (y/n) [y]: ").lower()
+    if use_def == 'n':
+        print("Enter Bill To Address (End with empty line):")
+        lines = []
+        while True:
+            l = safe_input("")
+            if not l: break
+            lines.append(l)
+        bill_to = "\n".join(lines)
+    else:
+        bill_to = cust_bill
+
+    print("\n--- Ship To Address ---")
+    print(f"Customer Default:\n{cust_ship}")
+    use_def = safe_input("Use Default? (y/n) [y]: ").lower()
+    if use_def == 'n':
+        print("Enter Ship To Address (End with empty line):")
+        lines = []
+        while True:
+            l = safe_input("")
+            if not l: break
+            lines.append(l)
+        ship_to = "\n".join(lines)
+    else:
+        ship_to = cust_ship
+        
+    # 3. Line Items
+    co_lines = []
+    products = session.query(Product).all()
+    prod_map = {f"{p.sku} - {p.name}": p for p in products}
+    prod_completer = WordCompleter(list(prod_map.keys()), ignore_case=True, match_middle=True)
+    
+    while True:
+        print(f"\n--- Add Line Item ({len(co_lines)} added) ---")
+        try:
+            p_input = prompt("Select Product (Empty to finish): ", completer=prod_completer)
+        except KeyboardInterrupt: break
+        
+        if not p_input: break
+        
+        product = None
+        if p_input in prod_map:
+            product = prod_map[p_input]
+        else:
+            print("Please select a valid product.")
+            continue
+            
+        qty_str = safe_input("Quantity: ")
+        if not qty_str.isdigit():
+             print("Invalid quantity.")
+             continue
+        qty = int(qty_str)
+        
+        unit = safe_input(f"Unit: ")
+        
+        default_price = 0.0
+        try:
+             default_price = float(product.unit_price)
+        except (ValueError, TypeError):
+             pass
+        
+        price_str = safe_input(f"Unit Price [{default_price}]: ")
+        try:
+            price = float(price_str) if price_str else default_price
+        except ValueError:
+            price = 0.0
+            
+        desc = safe_input(f"Description [{product.name}]: ") or product.name
+        
+        amount = qty * price
+        
+        co_lines.append({
+            "product_id": product.id,
+            "qty": qty,
+            "unit": unit,
+            "selling_price": price,
+            "description": desc,
+            "amount": amount
+        })
+        
+    if not co_lines:
+        print("No lines added. Aborting.")
+        return
+
+    # 4. Financials
+    subtotal = sum(l['amount'] for l in co_lines)
+    print(f"\nSubtotal: ${subtotal:.2f}")
+    
+    try:
+        shipping = float(safe_input("Shipping Cost [0.0]: ") or 0.0)
+        discount = float(safe_input("Discount [0.0]: ") or 0.0)
+        paid = float(safe_input("Amount Paid [0.0]: ") or 0.0)
+        credit = float(safe_input("Credit Applied [0.0]: ") or 0.0)
+    except ValueError:
+        print("Invalid number.")
+        return
+
+    # Create Object
+    co = CustomerOrder(
+        customer_id=customer.id,
+        invoice_number=inv_num,
+        po_number=po_num,
+        date=co_date,
+        tracking_terms=tracking,
+        notes=notes,
+        bill_to_address=bill_to,
+        ship_to_address=ship_to,
+        shipping=shipping,
+        discount=discount,
+        amount_paid=paid,
+        credit=credit,
+        status='Pending'
+    )
+    
+    for l in co_lines:
+        line = CustomerOrderLine(
+            product_id=l['product_id'],
+            qty=l['qty'],
+            unit=l['unit'],
+            selling_price=l['selling_price'],
+            description=l['description'],
+            amount=l['amount']
+        )
+        co.lines.append(line)
+        
+    try:
+        session.add(co)
+        session.commit()
+        print(f"Customer Order created successfully (ID: {co.id}).")
+    except Exception as e:
+        session.rollback()
+        print(f"Error saving order: {e}")
+
+def list_customer_orders(session: Session):
+    print("\n--- List Customer Orders ---")
+    orders = session.query(CustomerOrder).all()
+    if not orders:
+        print("No orders found.")
+        return
+        
+    data = []
+    for co in orders:
+        subtotal = sum(l.amount for l in co.lines)
+        total = subtotal + co.shipping - co.discount - co.credit
+        data.append([
+            co.id,
+            co.date.strftime("%Y-%m-%d"),
+            co.customer.customer_name,
+            co.invoice_number or "N/A",
+            co.status,
+            f"${total:.2f}"
+        ])
+    print_table(data, ["ID", "Date", "Customer", "Inv #", "Status", "Total"])
+
+def view_customer_order(session: Session):
+    print("\n--- View Customer Order ---")
+    orders = session.query(CustomerOrder).all()
+    if not orders: return
+    
+    # Map by Invoice # if exists, or ID/Customer
+    order_map = {}
+    for o in orders:
+        label = f"ID:{o.id} | {o.customer.customer_name}"
+        if o.invoice_number:
+            label += f" | Inv: {o.invoice_number}"
+        order_map[label] = o.id
+        
+    completer = WordCompleter(list(order_map.keys()), ignore_case=True, match_middle=True)
+    
+    try:
+        user_input = prompt("Select Order: ", completer=completer)
+    except KeyboardInterrupt: return
+    if not user_input: return
+    
+    co_id = None
+    if user_input in order_map:
+        co_id = order_map[user_input]
+    elif user_input.isdigit():
+        co_id = int(user_input)
+    else:
+         match = re.search(r"ID:(\d+)", user_input)
+         if match: co_id = int(match.group(1))
+         
+    co = session.get(CustomerOrder, co_id)
+    if not co: return
+    
+    print(f"\nOrder ID:    {co.id}")
+    print(f"Customer:    {co.customer.customer_name}")
+    print(f"Date:        {co.date}")
+    print(f"Status:      {co.status}")
+    print(f"Invoice #:   {co.invoice_number}")
+    print(f"PO Number:   {co.po_number}")
+    print(f"Tracking:    {co.tracking_terms}")
+    print(f"Bill To:\n{co.bill_to_address}")
+    print(f"Ship To:\n{co.ship_to_address}")
+    print(f"Notes:       {co.notes}")
+    
+    print("\n--- Line Items ---")
+    data = []
+    for i, l in enumerate(co.lines, 1):
+        data.append([
+            i,
+            l.product.sku,
+            l.description,
+            l.qty,
+            l.unit,
+            f"${l.selling_price:.2f}",
+            f"${l.amount:.2f}"
+        ])
+    print_table(data, ["#", "SKU", "Desc", "Qty", "Unit", "Price", "Amount"])
+    
+    # Totals
+    subtotal = sum(l.amount for l in co.lines)
+    total = subtotal + co.shipping - co.discount - co.credit
+    
+    print(f"\nSubtotal:    ${subtotal:.2f}")
+    if co.shipping: print(f"Shipping:   +${co.shipping:.2f}")
+    if co.discount: print(f"Discount:   -${co.discount:.2f}")
+    if co.credit:   print(f"Credit:     -${co.credit:.2f}")
+    print(f"TOTAL:       ${total:.2f}")
+    if co.amount_paid: print(f"Paid:       -${co.amount_paid:.2f}")
+    print(f"Balance Due: ${(total - co.amount_paid):.2f}")
+    
+    print("\n")
+    action = safe_input("Press [Enter] to go back, 'e' to Edit: ")
+    if action.lower() == 'e':
+        edit_customer_order(session, co)
+
+def edit_customer_order(session: Session, co: CustomerOrder):
+    print(f"\n--- Edit Customer Order {co.id} ---")
+    print("Press [Enter] to keep current value.")
+    
+    inv_num = safe_input(f"Invoice Number [{co.invoice_number}]: ")
+    if inv_num: co.invoice_number = inv_num
+    
+    po_num = safe_input(f"PO Number [{co.po_number}]: ")
+    if po_num: co.po_number = po_num
+    
+    d_str = safe_input(f"Date [{co.date.strftime('%Y-%m-%d')}]: ")
+    if d_str:
+        try:
+            co.date = datetime.strptime(d_str, "%Y-%m-%d")
+        except: pass
+        
+    co.tracking_terms = safe_input(f"Tracking [{co.tracking_terms}]: ") or co.tracking_terms
+    
+    # Financials
+    ship = safe_input(f"Shipping [{co.shipping}]: ")
+    if ship: co.shipping = float(ship)
+    
+    disc = safe_input(f"Discount [{co.discount}]: ")
+    if disc: co.discount = float(disc)
+    
+    paid = safe_input(f"Paid [{co.amount_paid}]: ")
+    if paid: co.amount_paid = float(paid)
+    
+    cred = safe_input(f"Credit [{co.credit}]: ")
+    if cred: co.credit = float(cred)
+    
+    co.notes = safe_input(f"Notes [{co.notes}]: ") or co.notes
+    
+    # Address Editing? Maybe too complex for single field.
+    change_addr = safe_input("Edit Addresses? (y/n) [n]: ")
+    if change_addr.lower() == 'y':
+        print("--- Bill To ---")
+        print(f"Current:\n{co.bill_to_address}\n")
+        print("Enter New Bill To (Empty line to finish):")
+        lines = []
+        while True:
+            l = safe_input("")
+            if not l: break
+            lines.append(l)
+        if lines: co.bill_to_address = "\n".join(lines)
+        
+        print("--- Ship To ---")
+        print(f"Current:\n{co.ship_to_address}\n")
+        print("Enter New Ship To (Empty line to finish):")
+        lines = []
+        while True:
+             l = safe_input("")
+             if not l: break
+             lines.append(l)
+        if lines: co.ship_to_address = "\n".join(lines)
+
+    try:
+        session.commit()
+        print("Order Updated.")
+    except Exception as e:
+        session.rollback()
+        print(f"Error: {e}")
 
 
 # --- Menus ---
@@ -1043,15 +1455,19 @@ def order_menu(session: Session):
         print("1. Create Purchase Order")
         print("2. Create Customer Order")
         print("3. List Purchase Orders")
-        print("4. View Purchase Order Details")
+        print("4. List Customer Orders")
+        print("5. View Purchase Order Details")
+        print("6. View Customer Order Details")
         print("9. Main Menu")
         print("0. Back")
         
         choice = safe_input("Select: ")
         if choice == '1': create_purchase_order(session)
-        elif choice == '2': create_customer_order(session) # Placeholder
+        elif choice == '2': create_customer_order(session)
         elif choice == '3': list_orders(session)
-        elif choice == '4': view_order_details(session) # New option
+        elif choice == '4': list_customer_orders(session)
+        elif choice == '5': view_order_details(session)
+        elif choice == '6': view_customer_order(session)
         elif choice == '9': return "main"
         elif choice == '0': break
 

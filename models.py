@@ -187,6 +187,25 @@ class CustomerOrder(Base):
     date = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum('Pending', 'Invoiced', 'Cancelled', name='order_status'), default='Pending')
     
+    # New Fields for Invoice Generation
+    invoice_number = Column(String(50), unique=True, nullable=True)
+    po_number = Column(String(50), nullable=True) # Customer's PO
+    
+    # Financials
+    credit = Column(Float, default=0.0)
+    discount = Column(Float, default=0.0)
+    amount_paid = Column(Float, default=0.0)
+    shipping = Column(Float, default=0.0)
+    
+    # Logistics & Terms
+    tracking_terms = Column(String(100), nullable=True) # e.g. FedEx 12345
+    
+    # Addresses (Text to allow full snapshot)
+    bill_to_address = Column(Text, nullable=True)
+    ship_to_address = Column(Text, nullable=True)
+    
+    notes = Column(Text, nullable=True)
+    
     customer = relationship("Customer")
     lines = relationship("CustomerOrderLine", back_populates="order", cascade="all, delete-orphan")
 
@@ -197,6 +216,11 @@ class CustomerOrderLine(Base):
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
     qty = Column(Integer, nullable=False)
     selling_price = Column(Float, nullable=False)
+    
+    # Detail fields
+    description = Column(String(255), nullable=True) # Override product name
+    unit = Column(String(50), nullable=True)
+    amount = Column(Float, default=0.0) # qty * selling_price usually, but explicit for exact matching
     
     order = relationship("CustomerOrder", back_populates="lines")
     product = relationship("Product")
